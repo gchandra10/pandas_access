@@ -7,11 +7,11 @@ try:
 except ImportError:
     from io import BytesIO
 
+#TABLE_RE = re.compile("CREATE TABLE \[(\w+)\]\s+\((.*?\));",re.MULTILINE | re.DOTALL)
+TABLE_RE = re.compile(r"CREATE TABLE \[(.+?)\]\s+\((.*?);", re.MULTILINE | re.DOTALL)
 
-TABLE_RE = re.compile("CREATE TABLE \[(\w+)\]\s+\((.*?\));",
-                      re.MULTILINE | re.DOTALL)
-
-DEF_RE = re.compile("\s*\[(\w+)\]\s*(.*?),")
+#DEF_RE = re.compile("\s*\[(\w+)\]\s*(.*?),")
+DEF_RE = re.compile(r"\s*\[(.+?)\]\s*(.*?)(,|\))")
 
 
 def list_tables(rdb_file, encoding="latin-1"):
@@ -22,8 +22,8 @@ def list_tables(rdb_file, encoding="latin-1"):
         actually be UTF-8.
     :return: A list of the tables in a given database.
     """
-    tables = subprocess.check_output(['mdb-tables', rdb_file]).decode(encoding)
-    return tables.strip().split(" ")
+    tables = subprocess.check_output(['mdb-tables','-d', ',', rdb_file]).decode(encoding)
+    return tables.strip().split(",")
 
 
 def _extract_dtype(data_type):
@@ -31,13 +31,31 @@ def _extract_dtype(data_type):
     # at the time of creation. If you see a new data-type, patch-pull or just
     # open an issue.
     data_type = data_type.lower()
-    if data_type.startswith('double'):
-        return np.float_
-    elif data_type.startswith('long'):
-        return np.int_
-    else:
-        return None
+    
+    # if data_type.startswith('double'):
+    #     return np.float_
+    # elif data_type.startswith('long'):
+    #     return np.int_
+    # else:
+    #     return None
 
+    match data_type:
+        case _ if data_type.startswith('double'):
+            return np.float_
+        # case _ if data_type.startswith('long'):
+        #     return np.int_
+        # case _ if data_type.startswith('text'):
+        #     return np.str_
+        # # case _ if data_type.startswith('datetime'):
+        # #     return np.datetime64
+        # case _ if data_type.startswith('currency'):
+        #     return np.float_
+        # case _ if data_type.startswith('byte'):
+        #     return np.int8
+        case _ if data_type.startswith('boolean'):
+            return np.bool_
+        case _:
+            return None
 
 def _extract_defs(defs_str):
     defs = {}
@@ -113,6 +131,9 @@ def read_table(rdb_file, table_name, *args, **kwargs):
         `chunksize=k`)
     """
     if kwargs.pop('converters_from_schema', True):
+        # if ' ' in table_name:
+        #     table_name = f"'{table_name}'"
+            
         specified_dtypes = kwargs.pop('dtype', {})
         schema_encoding = kwargs.pop('schema_encoding', 'utf8')
         schemas = to_pandas_schema(read_schema(rdb_file, schema_encoding),
